@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: using-spring-kafka
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:15432/appdb
+    username: test
+    password: password
+  flyway:
+    locations: classpath:db/migration
+    url: ${spring.datasource.url}
+    user: test
+    password: password
+    table: 'schema_version'

@@ -1,0 +1,71 @@
+buildscript {
+    ext {
+        springBootVersion = '2.3.5.RELEASE'
+    }
+    repositories {
+        jcenter()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath "com.avast.gradle:gradle-docker-compose-plugin:0.13.0"
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'docker-compose'
+
+sourceCompatibility = JavaVersion.VERSION_13
+targetCompatibility = JavaVersion.VERSION_13
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    annotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    testImplementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    testAnnotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+
+    implementation "org.springframework.boot:spring-boot-starter"
+    implementation "org.springframework.boot:spring-boot-starter-jdbc"
+    implementation 'org.apache.kafka:kafka-clients'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation "org.postgresql:postgresql"
+    implementation "org.flywaydb:flyway-core"
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
+
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+    }
+    testImplementation 'org.awaitility:awaitility'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+test {
+    useJUnitPlatform()
+    systemProperty 'junit.jupiter.extensions.autodetection.enabled', 'true'
+}
+
+dockerCompose.isRequiredBy(test)
+dockerCompose {
+    useComposeFiles = ["docker-compose.yml"]
+}
+
+test.doFirst {
+    def kafka0 = dockerCompose.servicesInfos.kafka0
+    def kafka1 = dockerCompose.servicesInfos.kafka1
+    def kafka2 = dockerCompose.servicesInfos.kafka2
+
+    systemProperty('kafka0.containerId', "${kafka0.firstContainer.containerId}")
+    systemProperty('kafka1.containerId', "${kafka1.firstContainer.containerId}")
+    systemProperty('kafka2.containerId', "${kafka2.firstContainer.containerId}")
+}
