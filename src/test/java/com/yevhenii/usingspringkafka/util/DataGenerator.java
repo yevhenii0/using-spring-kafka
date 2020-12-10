@@ -4,6 +4,7 @@ import com.yevhenii.usingspringkafka.payment.Payment;
 import com.yevhenii.usingspringkafka.payment.PaymentCreatedEvent;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public interface DataGenerator<T> {
 
@@ -22,4 +23,8 @@ public interface DataGenerator<T> {
   }
 
   T gen(int idx);
+
+  default T gen() {
+    return gen(ThreadLocalRandom.current().nextInt(1000));
+  }
 }
