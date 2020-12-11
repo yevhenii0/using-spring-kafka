@@ -36,6 +36,7 @@ dependencies {
     implementation "org.flywaydb:flyway-core"
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
+    implementation "com.google.guava:guava:30.0-jre"
 
     testImplementation('org.springframework.boot:spring-boot-starter-test') {
         exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
