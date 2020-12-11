@@ -22,4 +22,11 @@ public final class Topics {
     log.info("Created a new topic. Name: {}, partitions {}, replication factor: {}", topic.name(), partitions, repFac);
     return topic;
   }
+
+  public static void remove(String topic) throws ExecutionException, InterruptedException {
+    try (AdminClient client = KafkaFactories.createAdminClient()) {
+      client.deleteTopics(List.of(topic)).all().get();
+    }
+    log.info("Removed topic {}", topic);
+  }
 }
