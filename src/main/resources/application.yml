@@ -13,3 +13,10 @@ spring:
     user: test
     password: password
     table: 'schema_version'
+  kafka:
+    bootstrap-servers: localhost:34092
+    clientId: client-id
+    consumer:
+      groupId: app
+      enableAutoCommit: false
+      autoOffsetReset: earliest
