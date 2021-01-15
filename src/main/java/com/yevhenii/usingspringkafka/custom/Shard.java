@@ -3,8 +3,9 @@ package com.yevhenii.usingspringkafka.custom;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.kafka.config.KafkaListenerContainerFactory;
 import org.springframework.kafka.config.KafkaListenerEndpoint;
-import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistrar;
 import org.springframework.kafka.listener.MessageListener;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.TopicPartitionOffset;
@@ -27,6 +28,7 @@ public class Shard {
   private final AtomicBoolean registered = new AtomicBoolean(false);
   private final ShardConfiguration configuration;
   private final Map<String, CustomMessageListener<?>> topic2listener;
+  private final KafkaListenerContainerFactory<?> containerFactory;
 
   public Shard(ShardConfiguration configuration, List<CustomMessageListener<?>> listeners) {
     this.configuration = configuration;
@@ -39,11 +41,12 @@ public class Shard {
       }
     }
     this.topic2listener = Map.copyOf(topic2listener);
+    this.containerFactory = configuration.containerFactory();
   }
 
-  public void register(KafkaListenerEndpointRegistry registry) {
-    if (registered.compareAndSet(false, true)){
-      registry.registerListenerContainer(new ShardToKafkaEndpointAdapter(), configuration.containerFactory());
+  public void register(KafkaListenerEndpointRegistrar registrar) {
+    if (registered.compareAndSet(false, true)) {
+      registrar.registerEndpoint(new ShardToKafkaEndpointAdapter(), containerFactory);
     }
   }
 
@@ -52,9 +55,9 @@ public class Shard {
     final Map<String, CustomMessageListener<?>> topic2listener;
     final RecordMessageConverter recordMessageConverter;
 
-    private CompositeKafkaMessageListener(Map<String, CustomMessageListener<?>> topic2listener, MessageConverter messageConverter) {
+    private CompositeKafkaMessageListener(Map<String, CustomMessageListener<?>> topic2listener, RecordMessageConverter messageConverter) {
       this.topic2listener = topic2listener;
-      this.recordMessageConverter = (RecordMessageConverter) messageConverter;
+      this.recordMessageConverter = messageConverter;
     }
 
     @Override
@@ -116,7 +119,7 @@ public class Shard {
 
     @Override
     public void setupListenerContainer(MessageListenerContainer listenerContainer, MessageConverter messageConverter) {
-      listenerContainer.setupMessageListener(new CompositeKafkaMessageListener(topic2listener, messageConverter));
+      listenerContainer.setupMessageListener(new CompositeKafkaMessageListener(topic2listener, (RecordMessageConverter) messageConverter));
     }
 
     @Override

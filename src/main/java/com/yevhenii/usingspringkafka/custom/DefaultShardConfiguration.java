@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class DefaultShardRegistration implements ShardConfiguration {
+public class DefaultShardConfiguration implements ShardConfiguration {
 
   private final ConcurrentKafkaListenerContainerFactory<?, ?> kafkaListenerContainerFactory;
 
