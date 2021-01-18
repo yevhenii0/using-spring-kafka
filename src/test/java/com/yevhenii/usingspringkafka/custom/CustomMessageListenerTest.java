@@ -16,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import lombok.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -37,16 +38,16 @@ import org.springframework.kafka.listener.ContainerProperties;
 class CustomMessageListenerTest {
 
   @Autowired
-  ListenerA listenerA;
+  ConsumerA listenerA;
 
   @Autowired
-  ListenerB listenerB;
+  ConsumerB listenerB;
 
   @Autowired
-  ListenerC listenerC;
+  ConsumerC listenerC;
 
   @Autowired
-  @Qualifier(Shard.CONTAINERS_GROUP)
+  @Qualifier(ShardEndpoint.CONTAINERS_GROUP)
   List<ConcurrentMessageListenerContainer<?, ?>> containers;
 
   @Test
@@ -82,6 +83,7 @@ class CustomMessageListenerTest {
 
     private final ConcurrentKafkaListenerContainerFactoryConfigurer configurer;
     private final KafkaProperties kafkaProperties;
+    private final KafkaHandlers kafkaHandlers;
 
     @Bean
     MyIntegrationShardConfiguration myIntegrationShardConfiguration() {
@@ -89,18 +91,40 @@ class CustomMessageListenerTest {
     }
 
     @Bean
-    ListenerA listenerA() {
-      return new ListenerA();
+    ConsumerA consumerA() {
+      return new ConsumerA();
     }
 
     @Bean
-    ListenerB listenerB() {
-      return new ListenerB();
+    KafkaHandler handlerA() {
+      return kafkaHandlers.builder(A.TOPIC)
+              .messageType(A.class)
+              .buildJsonHandler(consumerA());
     }
 
     @Bean
-    ListenerC listenerC() {
-      return new ListenerC();
+    ConsumerB consumerB() {
+      return new ConsumerB();
+    }
+
+    @Bean
+    KafkaHandler handlerB() {
+      return kafkaHandlers.builder(B.TOPIC)
+              .messageType(B.class)
+              .buildJsonHandler(consumerB());
+    }
+
+    @Bean
+    ConsumerC consumerC() {
+      return new ConsumerC();
+    }
+
+    @Bean
+    KafkaHandler handlerC() {
+      return kafkaHandlers.builder(C.TOPIC)
+              .shardId(MyIntegrationShardId.P1)
+              .messageType(C.class)
+              .buildJsonHandler(consumerC());
     }
   }
 
@@ -131,59 +155,22 @@ class CustomMessageListenerTest {
     String id;
   }
 
-  static abstract class TrackingListener<T> implements CustomMessageListener<T> {
+  static abstract class TrackingListener<T> implements MessageConsumer<T> {
 
     final CopyOnWriteArrayList<T> messages = new CopyOnWriteArrayList<>();
 
     @Override
-    public final void onMessage(T message) {
+    public void onMessage(T message, ConsumerRecord<Object, Object> record) {
       messages.add(message);
     }
   }
 
-  static class ListenerA extends TrackingListener<A> {
-    @Override
-    public Class<A> messageType() {
-      return A.class;
-    }
+  static class ConsumerA extends TrackingListener<A> { }
 
-    @Override
-    public List<String> topics() {
-      return List.of(A.TOPIC);
-    }
-  }
-
-  static class ListenerB extends TrackingListener<B> {
-
-    @Override
-    public Class<B> messageType() {
-      return B.class;
-    }
-
-    @Override
-    public List<String> topics() {
-      return List.of(B.TOPIC);
-    }
-  }
+  static class ConsumerB extends TrackingListener<B> { }
 
   // Uses non default shard!
-  static class ListenerC extends TrackingListener<C> {
-
-    @Override
-    public Class<C> messageType() {
-      return C.class;
-    }
-
-    @Override
-    public List<String> topics() {
-      return List.of(C.TOPIC);
-    }
-
-    @Override
-    public ShardId shardId() {
-      return MyIntegrationShardId.P1;
-    }
-  }
+  static class ConsumerC extends TrackingListener<C> { }
 
   static class MyIntegrationShardId extends ShardId {
 
@@ -201,7 +188,7 @@ class CustomMessageListenerTest {
     private final KafkaProperties kafkaProperties;
 
     @Override
-    public ShardId getShardId() {
+    public ShardId shardId() {
       return MyIntegrationShardId.P1;
     }
 

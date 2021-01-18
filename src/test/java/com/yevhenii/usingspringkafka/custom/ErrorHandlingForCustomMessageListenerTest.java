@@ -8,8 +8,7 @@ import com.yevhenii.usingspringkafka.util.SpringKafkaFactories;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import lombok.RequiredArgsConstructor;
-import org.assertj.core.api.Assertions;
-import org.awaitility.Awaitility;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
@@ -33,7 +32,7 @@ class ErrorHandlingForCustomMessageListenerTest {
   private static final String T1 = "topic-error-handling-for-custom-message-listener";
 
   @Autowired
-  private Listener listener;
+  private Consumer consumer;
 
   @Test
   void failedMessageGetsRetried() {
@@ -41,8 +40,8 @@ class ErrorHandlingForCustomMessageListenerTest {
     template.send(T1, "x1");
     template.send(T1, "x2");
 
-    await().until(() -> listener.messagesConsumed.contains("x2"));
-    assertThat(listener.messagesConsumed).containsExactly("x1", "x1", "x1", "x2");
+    await().until(() -> consumer.messagesConsumed.contains("x2"));
+    assertThat(consumer.messagesConsumed).containsExactly("x1", "x1", "x1", "x2");
   }
 
   @TestConfiguration
@@ -53,15 +52,35 @@ class ErrorHandlingForCustomMessageListenerTest {
     private final KafkaProperties kafkaProperties;
 
     @Bean
-    Listener listener() {
-      return new Listener();
+    Consumer kafkaConsumer() {
+      return new Consumer();
+    }
+
+    @Bean
+    KafkaHandler handler() {
+      return new KafkaHandler() {
+        @Override
+        public ShardId shardId() {
+          return new ShardId(ErrorHandlingForCustomMessageListenerTest.class.getSimpleName());
+        }
+
+        @Override
+        public List<String> topics() {
+          return List.of(T1);
+        }
+
+        @Override
+        public RecordConsumer<?, ?> consumer() {
+          return kafkaConsumer();
+        }
+      };
     }
 
     @Bean
     ShardConfiguration shardConfiguration() {
       return new ShardConfiguration() {
         @Override
-        public ShardId getShardId() {
+        public ShardId shardId() {
           return new ShardId(ErrorHandlingForCustomMessageListenerTest.class.getSimpleName());
         }
 
@@ -77,31 +96,16 @@ class ErrorHandlingForCustomMessageListenerTest {
     }
   }
 
-  static class Listener implements CustomMessageListener<String> {
+  static class Consumer implements RecordConsumer<Object, Object>  {
 
     private final CopyOnWriteArrayList<String> messagesConsumed = new CopyOnWriteArrayList<>();
 
     @Override
-    public Class<String> messageType() {
-      return String.class;
-    }
-
-    @Override
-    public void onMessage(String message) {
-      messagesConsumed.add(message);
-      if (message.equals("x1")) {
+    public void onRecord(ConsumerRecord<Object, Object> record) {
+      messagesConsumed.add(record.value().toString());
+      if (record.value().equals("x1")) {
         throw new RuntimeException("oops");
       }
-    }
-
-    @Override
-    public List<String> topics() {
-      return List.of(T1);
-    }
-
-    @Override
-    public ShardId shardId() {
-      return new ShardId(ErrorHandlingForCustomMessageListenerTest.class.getSimpleName());
     }
   }
 }

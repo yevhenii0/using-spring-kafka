@@ -14,7 +14,7 @@ public class DefaultShardConfiguration implements ShardConfiguration {
   private final ConcurrentKafkaListenerContainerFactory<?, ?> kafkaListenerContainerFactory;
 
   @Override
-  public ShardId getShardId() {
+  public ShardId shardId() {
     return ShardId.DEFAULT;
   }
 
