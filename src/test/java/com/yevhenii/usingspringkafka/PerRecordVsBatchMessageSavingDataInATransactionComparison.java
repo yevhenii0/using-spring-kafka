@@ -34,15 +34,15 @@ import org.springframework.kafka.listener.MessageListener;
 /**
  * Results.
  *
- * MAC (50k records).
+ * <p>MAC (50k records).
  * Per record consumer: 163s/224s.
  * Batch consumer: 5s/8s.
  *
- * Linux PC (50k records).
+ * <p>Linux PC (50k records).
  * Per record consumer: 12s.
  * Batch consumer: 1s.
  *
- * Linux PC (1mln records).
+ * <p>Linux PC (1mln records).
  * Per record consumer: 247s.
  * Batch consumer: 19s.
  */

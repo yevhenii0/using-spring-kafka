@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yevhenii.usingspringkafka.payment.PaymentCreatedEvent;
 import com.yevhenii.usingspringkafka.util.DataGenerator;
 import com.yevhenii.usingspringkafka.util.Mapper;
@@ -16,7 +17,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
+import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,6 +32,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.SeekToCurrentErrorHandler;
+import org.springframework.kafka.support.converter.ConversionException;
 import org.springframework.util.backoff.FixedBackOff;
 
 @SpringBootTest
@@ -35,27 +40,51 @@ import org.springframework.util.backoff.FixedBackOff;
 class SeekToCurrentErrorHandlerTest {
 
   private static final String T1 = "topic-continue-processing-when-error-encountered-1";
+  private static final String T2 = "topic-continue-processing-when-error-encountered-2";
   private static final int RETRIES = 5;
 
   @Autowired
-  private Listener listener;
+  private NotRetryingDeserializationFailuresListener t1Listener;
+
+  @Autowired
+  private RetryingDeserializationFailuresListener t2Listener;
 
   @Autowired
   private Dlq dlq;
 
+  @AfterEach
+  void cleanup() {
+    dlq.records.clear();
+  }
+
   @Test
-  void brokenMessageGetsRetriedSeveralTimesAndThenSentToDlq() {
+  void brokenMessageEndsUpInDlqImmediately() {
     DataGenerator<PaymentCreatedEvent> generator = DataGenerator.paymentCreatedEvents();
     KafkaTemplate<String, String> template = SpringKafkaFactories.createTemplate();
-    template.setDefaultTopic(T1);
-    template.sendDefault(Mapper.toJson(generator.gen()));
-    template.sendDefault("{\"brokenJson");
-    template.sendDefault("{\"brokenJson2");
-    template.sendDefault(Mapper.toJson(generator.gen()));
+    template.send(T1, Mapper.toJson(generator.gen()));
+    template.send(T1, "{\"brokenJson");
+    template.send(T1, "{\"brokenJson2");
+    template.send(T1, Mapper.toJson(generator.gen()));
+    await().until(() -> t1Listener.paymentIds.size() == 2);
 
-    await().until(() -> listener.paymentIds.size() == 2);
+    assertThat(t1Listener.failures.get()).isEqualTo(2);
+    assertThat(dlq.records.size()).isEqualTo(2);
+    assertThat(dlq.records.get(0).value()).isEqualTo("{\"brokenJson");
+    assertThat(dlq.records.get(1).value()).isEqualTo("{\"brokenJson2");
+  }
 
-    assertThat(listener.failures.get()).isEqualTo(RETRIES * 2);
+  @Test
+  void brokenMessageIsRetriedAndThenEndsUpInDlq() {
+    DataGenerator<PaymentCreatedEvent> generator = DataGenerator.paymentCreatedEvents();
+    KafkaTemplate<String, String> template = SpringKafkaFactories.createTemplate();
+    template.send(T2, Mapper.toJson(generator.gen()));
+    template.send(T2, "{\"brokenJson");
+    template.send(T2, "{\"brokenJson2");
+    template.send(T2, Mapper.toJson(generator.gen()));
+
+    await().until(() -> t2Listener.paymentIds.size() == 2);
+
+    assertThat(t2Listener.failures.get()).isEqualTo(RETRIES * 2);
     assertThat(dlq.records.size()).isEqualTo(2);
     assertThat(dlq.records.get(0).value()).isEqualTo("{\"brokenJson");
     assertThat(dlq.records.get(1).value()).isEqualTo("{\"brokenJson2");
@@ -65,8 +94,13 @@ class SeekToCurrentErrorHandlerTest {
   static class Cnf {
 
     @Bean
-    Listener listener() {
-      return new Listener();
+    NotRetryingDeserializationFailuresListener notRetryingDeserializationFailuresListener() {
+      return new NotRetryingDeserializationFailuresListener();
+    }
+
+    @Bean
+    RetryingDeserializationFailuresListener retryingDeserializationFailuresListener() {
+      return new RetryingDeserializationFailuresListener();
     }
 
     @Bean
@@ -88,20 +122,56 @@ class SeekToCurrentErrorHandlerTest {
     }
   }
 
-  static class Listener {
+  @RequiredArgsConstructor
+  private static class TrackingListener {
     final Set<UUID> paymentIds = new CopyOnWriteArraySet<>();
     final AtomicInteger failures = new AtomicInteger();
 
-    @KafkaListener(topics = T1)
-    void consume(String message) {
+    final Function<String, PaymentCreatedEvent> mapper;
+
+    void handle(String content) {
       try {
-        var paymentCreatedEvent = Mapper.toObject(message, PaymentCreatedEvent.class);
+        var paymentCreatedEvent = mapper.apply(content);
         paymentIds.add(paymentCreatedEvent.getPayment().getUuid());
       } catch (RuntimeException x) {
         failures.incrementAndGet();
         // Note that it will be logged the the KafkaMessageListenerContainer#ListenerConsumer
         throw x;
       }
+    }
+  }
+
+  static class NotRetryingDeserializationFailuresListener extends TrackingListener {
+    public NotRetryingDeserializationFailuresListener() {
+      super(content -> {
+        try {
+          return Mapper.MAPPER.readValue(content, PaymentCreatedEvent.class);
+        } catch (JsonProcessingException x) {
+          throw new ConversionException(x.getMessage(), x);
+        }
+      });
+    }
+
+    @KafkaListener(topics = T1)
+    public void consume(String content) {
+      handle(content);
+    }
+  }
+
+  static class RetryingDeserializationFailuresListener extends TrackingListener {
+    public RetryingDeserializationFailuresListener() {
+      super(content -> {
+        try {
+          return Mapper.MAPPER.readValue(content, PaymentCreatedEvent.class);
+        } catch (JsonProcessingException x) {
+          throw new RuntimeException(x.getMessage(), x);
+        }
+      });
+    }
+
+    @KafkaListener(topics = T2)
+    public void consume(String content) {
+      handle(content);
     }
   }
 
