@@ -5,6 +5,8 @@
         </encoder>
     </appender>
 
+<!--    <logger name="org.springframework.kafka.listener" level="TRACE"/>-->
+
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
