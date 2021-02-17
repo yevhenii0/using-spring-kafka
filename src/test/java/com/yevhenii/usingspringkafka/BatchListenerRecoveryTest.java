@@ -29,7 +29,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @SpringBootTest
 @Slf4j
-public class AnnotationBasedBatchListenerRecoveryTest {
+public class BatchListenerRecoveryTest {
 
     private static final String T1 = "topic-annotation-based-batch-listener-recovery-1";
 

@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.yevhenii.usingspringkafka.util.SpringKafkaFactories;
 import com.yevhenii.usingspringkafka.util.Names;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 import org.junit.jupiter.api.Test;
@@ -21,10 +20,10 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 
 @SpringBootTest
-@Import(AnnotationBasedBatchListenerIsConsumingMessagesTest.Cnf.class)
-class AnnotationBasedBatchListenerIsConsumingMessagesTest {
+@Import(RecordListenerIsConsumingMessagesTest.Cnf.class)
+class RecordListenerIsConsumingMessagesTest {
 
-  private static final String T1 = "topic-annotation-based-batch-listener-1";
+  private static final String T1 = "topic-annotation-based-listener-1";
 
   @Autowired
   private Listener listener;
@@ -59,8 +58,6 @@ class AnnotationBasedBatchListenerIsConsumingMessagesTest {
     ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
       ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
       factory.setConsumerFactory(consumerFactory());
-      // Note, listener will still work, just will receive single list for each message
-      factory.setBatchListener(true);
       return factory;
     }
 
@@ -75,8 +72,8 @@ class AnnotationBasedBatchListenerIsConsumingMessagesTest {
     private final Set<String> messagesConsumed = new CopyOnWriteArraySet<>();
 
     @KafkaListener(topics = {T1})
-    void consume(List<String> messages) {
-      messagesConsumed.addAll(messages);
+    void consume(String message) {
+      messagesConsumed.add(message);
     }
   }
 }

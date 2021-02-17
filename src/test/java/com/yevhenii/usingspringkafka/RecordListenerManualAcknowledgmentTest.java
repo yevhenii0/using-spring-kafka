@@ -31,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
-@Import(AnnotationBasedListenerManualAcknowledgmentTest.Cnf.class)
-class AnnotationBasedListenerManualAcknowledgmentTest {
+@Import(RecordListenerManualAcknowledgmentTest.Cnf.class)
+class RecordListenerManualAcknowledgmentTest {
 
     private static final String T1 = "topic-annotation-based-listener-man-ack-1";
 

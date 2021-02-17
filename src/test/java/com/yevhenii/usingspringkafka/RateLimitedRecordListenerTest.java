@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
-@Import(AnnotationBasedRateLimitedListenerTest.Cnf.class)
+@Import(RateLimitedRecordListenerTest.Cnf.class)
 @Slf4j
-public class AnnotationBasedRateLimitedListenerTest {
+public class RateLimitedRecordListenerTest {
 
   private static final String T1 = "topic-rate-limited-consumer-1";
 
