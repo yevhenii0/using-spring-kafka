@@ -36,7 +36,6 @@ import org.springframework.kafka.support.converter.ConversionException;
 import org.springframework.util.backoff.FixedBackOff;
 
 @SpringBootTest
-@Import(SeekToCurrentErrorHandlerTest.Cnf.class)
 class SeekToCurrentErrorHandlerTest {
 
   private static final String T1 = "topic-continue-processing-when-error-encountered-1";

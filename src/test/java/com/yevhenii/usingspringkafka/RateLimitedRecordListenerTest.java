@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
@@ -26,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
-@Import(RateLimitedRecordListenerTest.Cnf.class)
 @Slf4j
 public class RateLimitedRecordListenerTest {
 
@@ -36,7 +34,7 @@ public class RateLimitedRecordListenerTest {
   Listener listener;
 
   @Test
-  void listenerIsRateLimited() throws Exception {
+  void listenerIsRateLimited() {
     new MessageSender(T1, DataGenerator.paymentCreatedEvents()).send(1_000_000);
 
     await().atMost(Duration.ofSeconds(30)).until(() -> listener.messagesProcessed.get() > 300);

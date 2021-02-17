@@ -34,7 +34,6 @@ public class TimeAckTest {
 
   private static final String CONSUMER_GROUP = Names.randGroupId();
   private static final String T1 = "time-ack-topic-1";
-  private static final String CONTAINER_GROUP = "TimeAckTest";
   private static final long ACK_TIME_MS = Duration.ofSeconds(2).toMillis();
   private static final long POLL_TIMEOUT_MS = 200;
 
@@ -116,7 +115,7 @@ public class TimeAckTest {
 
     private final CopyOnWriteArrayList<String> messagesConsumed = new CopyOnWriteArrayList<>();
 
-    @KafkaListener(topics = T1, containerGroup = CONTAINER_GROUP)
+    @KafkaListener(topics = T1)
     void consume(String message) {
       messagesConsumed.add(message);
     }

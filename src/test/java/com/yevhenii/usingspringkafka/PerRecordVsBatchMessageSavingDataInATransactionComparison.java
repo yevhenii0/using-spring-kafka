@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.kafka.listener.BatchMessageListener;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.MessageListener;
@@ -48,7 +47,6 @@ import org.springframework.kafka.listener.MessageListener;
  */
 @Slf4j
 @SpringBootTest
-@Import(PerRecordVsBatchMessageSavingDataInATransactionComparison.Cnf.class)
 class PerRecordVsBatchMessageSavingDataInATransactionComparison {
 
   private static final int RECORDS = 50_000;
