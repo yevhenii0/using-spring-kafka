@@ -1,6 +1,7 @@
 package com.yevhenii.usingspringkafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 import static org.awaitility.Awaitility.await;
 
 import com.yevhenii.usingspringkafka.util.Names;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -75,6 +77,7 @@ public class BatchListenerRecoveryTest {
 
         await().until(() -> listener.messages.size() == 7);
         assertThat(listener.messages).containsExactly("x1", "x2", "x3", "x4", "x5", "x6" ,"x8");
+        assertThat(listener.failures.get()).isEqualTo(3); // num of retries
     }
 
     private void startListener() {
@@ -130,11 +133,13 @@ public class BatchListenerRecoveryTest {
         private static final String CONTAINER_GROUP = "batch-recovery-test-listener-1";
 
         private final Set<String> messages = new CopyOnWriteArraySet<>();
+        private final AtomicInteger failures = new AtomicInteger();
 
         @KafkaListener(topics = {T1}, autoStartup = "false", containerGroup = CONTAINER_GROUP)
         void consume(List<ConsumerRecord<String, String>> batch) {
             for (ConsumerRecord<String, String> record : batch) {
                 if (record.value().equals("x7")) {
+                    failures.incrementAndGet();
                     throw new BatchListenerFailedException("oops", record);
                 }
                 messages.add(record.value());
