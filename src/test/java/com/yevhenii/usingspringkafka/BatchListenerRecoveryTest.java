@@ -12,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
@@ -78,6 +79,14 @@ public class BatchListenerRecoveryTest {
         await().until(() -> listener.messages.size() == 7);
         assertThat(listener.messages).containsExactly("x1", "x2", "x3", "x4", "x5", "x6" ,"x8");
         assertThat(listener.failures.get()).isEqualTo(3); // num of retries
+
+        assertThat(listener.batches).containsExactly(
+            List.of("x1", "x2", "x3", "x4"),
+            List.of("x5", "x6", "x7", "x8"),
+            List.of("x7", "x8"), // first retry
+            List.of("x7", "x8"), // second retry
+            List.of("x8")
+        );
     }
 
     private void startListener() {
@@ -133,10 +142,17 @@ public class BatchListenerRecoveryTest {
         private static final String CONTAINER_GROUP = "batch-recovery-test-listener-1";
 
         private final Set<String> messages = new CopyOnWriteArraySet<>();
+        private final List<List<String>> batches = new CopyOnWriteArrayList<>();
         private final AtomicInteger failures = new AtomicInteger();
 
         @KafkaListener(topics = {T1}, autoStartup = "false", containerGroup = CONTAINER_GROUP)
         void consume(List<ConsumerRecord<String, String>> batch) {
+            batches.add(
+                batch.stream()
+                    .map(ConsumerRecord::value)
+                    .collect(Collectors.toList())
+            );
+
             for (ConsumerRecord<String, String> record : batch) {
                 if (record.value().equals("x7")) {
                     failures.incrementAndGet();
