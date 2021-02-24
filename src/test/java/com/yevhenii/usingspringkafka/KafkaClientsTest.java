@@ -2,11 +2,15 @@ package com.yevhenii.usingspringkafka;
 
 import static com.yevhenii.usingspringkafka.util.Defer.deferClose;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 import com.yevhenii.usingspringkafka.util.KafkaFactories;
 import com.yevhenii.usingspringkafka.util.Defer;
+import com.yevhenii.usingspringkafka.util.Topics;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -14,9 +18,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.yevhenii.usingspringkafka.util.Names;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
@@ -137,6 +145,26 @@ class KafkaClientsTest {
       consumer.poll(Duration.ofSeconds(1));
       return true;
     });
+  }
+
+  @Test
+  void callToPositionDoesNotCommitTheOffset() throws Exception {
+    var topic = Topics.rand().name();
+    var producer = deferClose(KafkaFactories.createProducer());
+    producer.send(new ProducerRecord<>(topic, "value1")).get();
+
+    var consumer = deferClose(KafkaFactories.createConsumer(Names.randGroupId()));
+    consumer.subscribe(Collections.singletonList(topic));
+
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+    assertEquals(1, records.count());
+    assertEquals(1, consumer.assignment().size());
+    TopicPartition partition = consumer.assignment().iterator().next();
+    assertEquals(1, consumer.position(partition));
+
+    Map<TopicPartition, OffsetAndMetadata> metadata = consumer.committed(consumer.assignment());
+    assertTrue(metadata.containsKey(partition));
+    assertNull(metadata.get(partition));
   }
 
   private static void sleep(int ms) {
