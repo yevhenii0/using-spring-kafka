@@ -1,6 +1,7 @@
 package com.yevhenii.usingspringkafka;
 
 import static com.yevhenii.usingspringkafka.util.Defer.deferClose;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.yevhenii.usingspringkafka.util.Names;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -165,6 +167,47 @@ class KafkaClientsTest {
     Map<TopicPartition, OffsetAndMetadata> metadata = consumer.committed(consumer.assignment());
     assertTrue(metadata.containsKey(partition));
     assertNull(metadata.get(partition));
+  }
+
+  @Test
+  void pollCanBeRetriedIfConsumerRebalanceListenerThrowsException() throws Exception {
+    var topic = Topics.rand().name();
+    var producer = deferClose(KafkaFactories.createProducer());
+    producer.send(new ProducerRecord<>(topic, "value1")).get();
+
+    var onPartitionsAssignedCalls = new AtomicInteger(0);
+    List<Collection<TopicPartition>> assignHistory = new ArrayList<>();
+    var consumer = deferClose(KafkaFactories.createConsumer(Names.randGroupId()));
+    consumer.subscribe(
+        Collections.singletonList(topic),
+        new ConsumerRebalanceListener() {
+          @Override
+          public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+
+          }
+
+          @Override
+          public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            assignHistory.add(partitions);
+            if (onPartitionsAssignedCalls.getAndIncrement() == 0) {
+              throw new RuntimeException("oops");
+            }
+          }
+        }
+    );
+
+    try {
+      consumer.poll(Duration.ofSeconds(5));
+    } catch (Exception x) {
+      assertThat(x.getCause().getMessage()).isEqualTo("oops");
+    }
+
+    ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+    assertThat(records.count()).isEqualTo(1);
+    assertThat(records.iterator().next().value()).isEqualTo("value1");
+    assertThat(onPartitionsAssignedCalls.get()).isEqualTo(2);
+    assertThat(assignHistory.get(0).size()).isEqualTo(1);
+    assertThat(assignHistory.get(1)).isEmpty();
   }
 
   private static void sleep(int ms) {

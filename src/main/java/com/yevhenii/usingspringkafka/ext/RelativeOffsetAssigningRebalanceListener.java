@@ -1,15 +1,17 @@
 package com.yevhenii.usingspringkafka.ext;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.listener.ConsumerAwareRebalanceListener;
-
-import java.time.Duration;
-import java.time.ZonedDateTime;
-import java.util.*;
 
 /**
  * Assigns offsets to (now-delta).
@@ -29,11 +31,7 @@ public class RelativeOffsetAssigningRebalanceListener implements ConsumerAwareRe
     long timestampToSearchMs = ZonedDateTime.now().plus(delta).toInstant().toEpochMilli();
 
     for (TopicPartition partition : partitions) {
-      try {
-        if (consumer.committed(Collections.singleton(partition)).get(partition) == null) {
-          timestampsToSearch.put(partition, timestampToSearchMs);
-        }
-      } catch (Throwable t) {
+      if (consumer.committed(Collections.singleton(partition)).get(partition) == null) {
         timestampsToSearch.put(partition, timestampToSearchMs);
       }
     }
