@@ -17,6 +17,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.listener.ConsumerAwareRebalanceListener;
 import org.springframework.kafka.listener.ConsumerSeekAware;
 
@@ -38,6 +40,10 @@ class KafkaListenerRetriesPollWhenExceptionOccursInRebalanceListener {
   @Autowired
   private EventuallyApplyingRelativeOffsetRebalanceListener eventuallyApplyingRelativeOffsetRebalanceListener;
 
+  @Autowired
+  @Qualifier(Listener.CONTAINER_GROUP)
+  private List<ConcurrentMessageListenerContainer<?, ?>> containers;
+
   @Test
   void resetsToDefaultOffsetWhenRelativeOffsetWhenConsumerRebalanceListenerThrowsException() {
     KafkaTemplate<String, String> template = SpringKafkaFactories.createTemplate();
@@ -49,6 +55,17 @@ class KafkaListenerRetriesPollWhenExceptionOccursInRebalanceListener {
     Awaitility.await().until(() -> listener.messages.size() == 2);
     assertThat(listener.messages).containsExactly("x1", "x2");
     assertThat(eventuallyApplyingRelativeOffsetRebalanceListener.onPartitionAssignedCalls.get()).isEqualTo(3);
+
+    containers.get(0).stop(true);
+    listener.messages.clear();
+
+    template.sendDefault("x3");
+    template.flush();
+
+    containers.get(0).start();
+    Awaitility.await().until(() -> listener.messages.size() == 1);
+    assertThat(listener.messages).contains("x3");
+    assertThat(eventuallyApplyingRelativeOffsetRebalanceListener.onPartitionAssignedCalls.get()).isEqualTo(6);
   }
 
   @TestConfiguration
@@ -80,9 +97,11 @@ class KafkaListenerRetriesPollWhenExceptionOccursInRebalanceListener {
 
   static class Listener implements ConsumerSeekAware {
 
-    private final List<String> messages = new CopyOnWriteArrayList<>();
+    static final String CONTAINER_GROUP = "ConsumerAwareListener";
 
-    @KafkaListener(topics = {T1})
+    final List<String> messages = new CopyOnWriteArrayList<>();
+
+    @KafkaListener(topics = {T1}, containerGroup = CONTAINER_GROUP)
     void consume(String message) {
       messages.add(message);
     }
