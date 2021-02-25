@@ -20,10 +20,7 @@ public class RelativeOffsetAssigningRebalanceListener implements ConsumerAwareRe
   private final Duration delta;
 
   public RelativeOffsetAssigningRebalanceListener(Duration delta) {
-    if (!delta.isNegative()) {
-      throw new IllegalArgumentException("Delta must be negative, value: " + delta);
-    }
-    this.delta = delta;
+    this.delta = delta.isNegative() ? delta : delta.negated();
   }
 
   @Override
