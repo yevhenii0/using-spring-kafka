@@ -4,18 +4,18 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.listener.ConsumerAwareRebalanceListener;
 
 /**
  * Assigns offsets to (now-delta).
- * Same as used in tw-tasks: https://github.com/transferwise/tw-tasks-executor/blob/da752f09b6a342a81c96a30d901327f1688ddccf/tw-tasks-core/src/main/java/com/transferwise/tasks/triggering/SeekToDurationOnRebalance.java#L29
  */
 public class RelativeOffsetAssigningRebalanceListener implements ConsumerAwareRebalanceListener {
 
@@ -27,11 +27,17 @@ public class RelativeOffsetAssigningRebalanceListener implements ConsumerAwareRe
 
   @Override
   public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
+    // could happen e.g. in case previous call to onPartitionsAssigned failed with exception
+    if (partitions.isEmpty()) {
+      return;
+    }
+
     Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
     long timestampToSearchMs = ZonedDateTime.now().plus(delta).toInstant().toEpochMilli();
 
+    Map<TopicPartition, OffsetAndMetadata> committed = consumer.committed(new HashSet<>(partitions));
     for (TopicPartition partition : partitions) {
-      if (consumer.committed(Collections.singleton(partition)).get(partition) == null) {
+      if (committed.get(partition) == null) {
         timestampsToSearch.put(partition, timestampToSearchMs);
       }
     }
